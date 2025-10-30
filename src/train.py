@@ -1,6 +1,6 @@
 import argparse
 import os
-from typing import Tuple
+from typing import Tuple, Dict, Any, List
 
 import joblib
 import numpy as np
@@ -18,7 +18,7 @@ def train_and_evaluate(
     output_vectorizer: str = "models/vectorizer.joblib",
     test_size: float = 0.2,
     random_state: int = 42,
-) -> Tuple[LogisticRegression, object]:
+) -> Tuple[LogisticRegression, Dict[str, Any]]:
     path = data_source
     if data_source.startswith("http"):
         path = ensure_data(data_source, out_path="data/raw.csv")
@@ -54,7 +54,21 @@ def train_and_evaluate(
 
     print("Training complete. Metrics:")
     print(classification_report(y_test, y_pred, digits=4))
-    return model, metrics
+
+    # compute top features
+    top_features = []
+    try:
+        coef = model.coef_.ravel()
+        feature_names = vectorizer.get_feature_names_out()
+        pairs = list(zip(feature_names, coef))
+        pairs.sort(key=lambda x: -x[1])
+        top_pos = pairs[:20]
+        top_neg = pairs[-20:]
+        top_features = {"top_positive": top_pos, "top_negative": top_neg}
+    except Exception:
+        top_features = {}
+
+    return model, {"metrics": metrics, "top_features": top_features}
 
 
 def cli():
@@ -73,6 +87,13 @@ def cli():
     )
     print("Saved model to:", args.output_model)
     print("Saved vectorizer to:", args.output_vectorizer)
+    if isinstance(metrics, dict) and "top_features" in metrics:
+        try:
+            print("Top positive features:")
+            for f, c in metrics["top_features"]["top_positive"][:10]:
+                print(f, c)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

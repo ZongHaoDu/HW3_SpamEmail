@@ -11,6 +11,12 @@ How to run
 python -m src.cli train
 ```
 
+Advanced: inspect model
+
+```bat
+python -m src.cli inspect
+```
+
 3. Run the Streamlit app:
 
 ```bat

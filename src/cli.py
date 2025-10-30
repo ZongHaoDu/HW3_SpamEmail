@@ -27,6 +27,31 @@ def main(argv=None):
             test_size=args.test_size,
             random_state=args.random_state,
         )
+    elif args.cmd == "inspect":
+        # Load model and vectorizer and print simple metadata
+        import joblib
+
+        try:
+            model = joblib.load(args.output_model)
+            vec = joblib.load(args.output_vectorizer)
+            print(f"Loaded model: {args.output_model}")
+            print(f"Vectorizer features: {len(vec.get_feature_names_out())}")
+            # print top features if available
+            try:
+                coef = model.coef_.ravel()
+                feature_names = vec.get_feature_names_out()
+                pairs = list(zip(feature_names, coef))
+                pairs.sort(key=lambda x: -x[1])
+                print("Top positive features:")
+                for f, c in pairs[:20]:
+                    print(f, c)
+                print("Top negative features:")
+                for f, c in pairs[-20:]:
+                    print(f, c)
+            except Exception as e:
+                print("Could not extract top features:", e)
+        except Exception as e:
+            print("Failed to load model/vectorizer:", e)
     else:
         parser.print_help()
 
