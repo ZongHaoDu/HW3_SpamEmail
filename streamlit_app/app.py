@@ -5,6 +5,8 @@ import streamlit as st
 import joblib
 import numpy as np
 import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
 from sklearn.metrics import (
     confusion_matrix,
     roc_curve,
@@ -170,6 +172,65 @@ def main():
                         }
                         st.write("### Summary metrics")
                         st.json(summary)
+                        # Top Tokens by Class (using model coefficients when available)
+                        try:
+                            st.markdown("### Top Tokens by Class (model coefficients)")
+                            if hasattr(model, "coef_") and vec is not None:
+                                coef = model.coef_.ravel()
+                                try:
+                                    feature_names = vec.get_feature_names_out()
+                                except Exception:
+                                    feature_names = vec.get_feature_names()
+                                pairs = list(zip(feature_names, coef))
+                                top_spam = sorted(pairs, key=lambda x: -x[1])[:15]
+                                top_ham = sorted(pairs, key=lambda x: x[1])[:15]
+
+                                cols = st.columns(2)
+                                with cols[0]:
+                                    st.subheader("Top tokens → spam")
+                                    dfp = {"token": [t for t, c in top_spam], "weight": [float(c) for t, c in top_spam]}
+                                    figp = px.bar(dfp, x="token", y="weight", title="Top tokens indicative of spam")
+                                    st.plotly_chart(figp, use_container_width=True)
+                                with cols[1]:
+                                    st.subheader("Top tokens → ham")
+                                    dfn = {"token": [t for t, c in top_ham], "weight": [float(c) for t, c in top_ham]}
+                                    fign = px.bar(dfn, x="token", y="weight", title="Top tokens indicative of ham")
+                                    st.plotly_chart(fign, use_container_width=True)
+                            else:
+                                st.info("Model coefficients or vectorizer not available to compute class tokens.")
+                        except Exception as e:
+                            st.info(f"Could not compute top tokens by class: {e}")
+
+                        # Threshold sweep (precision / recall / f1)
+                        try:
+                            if y_score is not None:
+                                st.markdown("### Threshold sweep (precision / recall / f1)")
+                                from sklearn.metrics import precision_score, recall_score, f1_score
+
+                                thresholds = np.linspace(0.0, 1.0, 101)
+                                precisions = []
+                                recalls = []
+                                f1s = []
+                                for t in thresholds:
+                                    preds_t = (y_score >= t).astype(int)
+                                    precisions.append(precision_score(y_true, preds_t, zero_division=0))
+                                    recalls.append(recall_score(y_true, preds_t, zero_division=0))
+                                    f1s.append(f1_score(y_true, preds_t, zero_division=0))
+
+                                fig = go.Figure()
+                                fig.add_trace(go.Scatter(x=thresholds, y=precisions, mode='lines', name='precision'))
+                                fig.add_trace(go.Scatter(x=thresholds, y=recalls, mode='lines', name='recall'))
+                                fig.add_trace(go.Scatter(x=thresholds, y=f1s, mode='lines', name='f1'))
+                                fig.update_layout(title='Threshold sweep', xaxis_title='threshold', yaxis_title='score')
+                                st.plotly_chart(fig, use_container_width=True)
+
+                                best_idx = int(np.nanargmax(f1s))
+                                best_t = float(thresholds[best_idx])
+                                st.write({'best_threshold': best_t, 'precision': precisions[best_idx], 'recall': recalls[best_idx], 'f1': f1s[best_idx]})
+                            else:
+                                st.info("No probability scores available — cannot perform threshold sweep.")
+                        except Exception as e:
+                            st.info(f"Threshold sweep failed: {e}")
                     except Exception:
                         pass
 
